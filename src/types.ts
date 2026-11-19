@@ -1,3 +1,4 @@
+export { Asset } from './helpers/Asset.js'
 import { Asset } from './helpers/Asset.js'
 import { PublicKey } from './helpers/PublicKey.js'
 
@@ -204,7 +205,7 @@ export interface CommentOptionsOperation {
   percent_sbd?: number
   allow_votes: boolean
   allow_curation_rewards: boolean
-  extensions: Array<Array<Beneficiary>>
+  extensions: any[]
 }
 
 export interface SetWithdrawVestingRouteOperation {

@@ -1,6 +1,8 @@
 import { isDeepStrictEqual } from 'node:util'
 import {
   Transaction,
+  chainTime,
+  authority,
   PrivateKey,
   PublicKey,
   Signature,
@@ -17,7 +19,8 @@ import {
   Client,
   type AppliedOperation,
   type Block,
-  type Operation
+  type Operation,
+  type Account
 } from '../src/index.js'
 
 // Test data
@@ -739,6 +742,195 @@ export const coverageTests = async () => {
     const c3 = virtualOps.every((o) => o.trx_id === '0000000000000000000000000000000000000000')
     const c4 = new Set(ops.map((o) => o.block)).size === 5
     return c1 && c2 && c3 && c4
+  })
+
+  console.log('Testing chainTime and authority helpers...')
+
+  await runTest('chainTime parses ISO with and without Z', () => {
+    const t1 = chainTime('2026-11-19T06:00:00Z')
+    const t2 = chainTime('2026-11-19T06:00:00')
+    return t1 === t2 && t1 === 1795068000000
+  })
+
+  await runTest('authority.hasAccountAuthority', () => {
+    const mockAccount: any = {
+      name: 'alice',
+      posting: {
+        weight_threshold: 1,
+        account_auths: [['substeem.app', 1]],
+        key_auths: []
+      }
+    }
+    const has = authority.hasAccountAuthority(mockAccount, 'posting', 'substeem.app')
+    const notHas = authority.hasAccountAuthority(mockAccount, 'posting', 'other.app')
+    return has === true && notHas === false
+  })
+
+  await runTest('authority.grantAccountAuthority sorts alphabetically', () => {
+    const mockAccount: any = {
+      name: 'alice',
+      posting: {
+        weight_threshold: 1,
+        account_auths: [['zebra.app', 1]],
+        key_auths: []
+      }
+    }
+    const [opName, op] = authority.grantAccountAuthority(mockAccount, 'posting', 'alpha.app', 1)
+    if (opName !== 'account_update2' || !op.posting) return false
+    const auths = op.posting.account_auths
+    return (
+      auths.length === 2 &&
+      auths[0][0] === 'alpha.app' &&
+      auths[1][0] === 'zebra.app'
+    )
+  })
+
+  await runTest('authority.revokeAccountAuthority with lockout check', () => {
+    const mockAccount: any = {
+      name: 'alice',
+      active: {
+        weight_threshold: 1,
+        account_auths: [['alpha.app', 1], ['zebra.app', 1]],
+        key_auths: []
+      }
+    }
+    const [opName, op] = authority.revokeAccountAuthority(mockAccount, 'active', 'alpha.app')
+    if (opName !== 'account_update2' || !op.active) return false
+    const auths = op.active.account_auths
+    const ok = auths.length === 1 && auths[0][0] === 'zebra.app'
+
+    // Verify lockout error thrown if last remaining auth is removed
+    let threw = false
+    try {
+      const emptyAccount: any = {
+        name: 'alice',
+        active: {
+          weight_threshold: 1,
+          account_auths: [['only.app', 1]],
+          key_auths: []
+        }
+      }
+      authority.revokeAccountAuthority(emptyAccount, 'active', 'only.app')
+    } catch {
+      threw = true
+    }
+    return ok && threw
+  })
+
+  console.log('Testing message signing, verification and getKeyRole...')
+
+  await runTest('utils.signMessage and utils.verifyMessage', async () => {
+    const privKey = PrivateKey.fromString(testPrivateKey)
+    const pubKey = privKey.createPublic()
+    const msg = 'Login to Substeem at ' + Date.now()
+    const sig = utils.signMessage(msg, privKey)
+
+    const validWithPub = await utils.verifyMessage(msg, sig, pubKey)
+    const validWithStr = await utils.verifyMessage(msg, sig, pubKey.toString())
+    const invalidWithAlteredMsg = await utils.verifyMessage(msg + 'x', sig, pubKey)
+
+    const mockAccount: any = {
+      name: 'testuser',
+      memo_key: pubKey.toString(),
+      posting: {
+        weight_threshold: 1,
+        account_auths: [],
+        key_auths: [[pubKey.toString(), 1]]
+      }
+    }
+    const validWithAccount = await utils.verifyMessage(msg, sig, mockAccount, 'posting')
+    const validWithMemo = await utils.verifyMessage(msg, sig, mockAccount, 'memo')
+
+    return (
+      validWithPub &&
+      validWithStr &&
+      !invalidWithAlteredMsg &&
+      validWithAccount &&
+      validWithMemo
+    )
+  })
+
+  await runTest('utils.getKeyRole', async () => {
+    const privKey = PrivateKey.fromString(testPrivateKey)
+    const pubKey = privKey.createPublic()
+    const otherKey = PrivateKey.randomKey().createPublic()
+
+    const mockAccount: any = {
+      name: 'testuser',
+      memo_key: pubKey.toString(),
+      posting: {
+        weight_threshold: 1,
+        account_auths: [],
+        key_auths: [[pubKey.toString(), 1]]
+      },
+      active: {
+        weight_threshold: 1,
+        account_auths: [],
+        key_auths: []
+      },
+      owner: {
+        weight_threshold: 1,
+        account_auths: [],
+        key_auths: []
+      }
+    }
+
+    const postingRole = await utils.getKeyRole(mockAccount, pubKey)
+    const noneRole = await utils.getKeyRole(mockAccount, otherKey)
+
+    return (postingRole === 'posting' || postingRole === 'memo') && noneRole === null
+  })
+
+  console.log('Testing commentOptions with alphabetical beneficiary sorting...')
+
+  await runTest('utils.commentOptions beneficiary sorting', () => {
+    const [opName, op] = utils.commentOptions('author', 'permlink', {
+      beneficiaries: [
+        { account: 'zebra', weight: 500 },
+        { account: 'alpha', weight: 1000 },
+        { account: 'beta', weight: 500 }
+      ]
+    })
+    if (opName !== 'comment_options') return false
+    const beneficiaries = op.extensions[0][1].beneficiaries
+    return (
+      beneficiaries.length === 3 &&
+      beneficiaries[0].account === 'alpha' &&
+      beneficiaries[1].account === 'beta' &&
+      beneficiaries[2].account === 'zebra'
+    )
+  })
+
+  console.log('Testing accountExists, getProfile, and getRequiredRole...')
+
+  await runTest('utils.accountExists', async () => {
+    const invalid = await utils.accountExists('INVALID_NAME!')
+    const exists = await utils.accountExists('steemit')
+    return invalid === false && exists === true
+  })
+
+  await runTest('utils.getProfile', async () => {
+    const mockAccount: any = {
+      posting_json_metadata: JSON.stringify({
+        profile: {
+          name: 'Steemit Team',
+          about: 'Building Steem'
+        }
+      })
+    }
+    const profile = await utils.getProfile(mockAccount)
+    return profile.name === 'Steemit Team' && profile.about === 'Building Steem'
+  })
+
+  await runTest('utils.getRequiredRole', () => {
+    const p1 = utils.getRequiredRole('vote') === 'posting'
+    const p2 = utils.getRequiredRole('comment') === 'posting'
+    const p3 = utils.getRequiredRole('custom_json') === 'posting'
+    const a1 = utils.getRequiredRole('transfer') === 'active'
+    const a2 = utils.getRequiredRole('delegate_vesting_shares') === 'active'
+    const o1 = utils.getRequiredRole('account_update') === 'owner'
+    const o2 = utils.getRequiredRole('change_recovery_account') === 'owner'
+    return p1 && p2 && p3 && a1 && a2 && o1 && o2
   })
 
   console.log(`\nCoverage tests completed: ${passedTests}/${totalTests} passed`)

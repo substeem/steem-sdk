@@ -1,11 +1,22 @@
 import { Serializer } from './serializer.js'
 import { ByteBuffer } from './ByteBuffer.js'
 import { PublicKey } from './PublicKey.js'
+import { Asset } from './Asset.js'
 import { bytesToHex, randomBytes } from '@noble/hashes/utils.js'
+import { callRPC } from './call.js'
+import type {
+  CommentOptionsOperation,
+  Beneficiary,
+  Account,
+  ExtendedAccount,
+  OperationName
+} from '../types.js'
+import type { KeyRole } from './PrivateKey.js'
 
 export * from './chainMath.js'
 export * from './keys.js'
 export * from './social.js'
+export * from './authority.js'
 
 /** Constant-time comparison of two Uint8Arrays to prevent timing attacks */
 export const equalBytes = (a: Uint8Array, b: Uint8Array): boolean => {
@@ -245,4 +256,129 @@ export const createPermlink = (title = ''): string => {
     .replace(/^-+|-+$/g, '')
   const suffix = bytesToHex(randomBytes(6))
   return slug ? `${slug}-${suffix}` : suffix
+}
+
+export interface CommentOptionsConfig {
+  max_accepted_payout?: string | Asset
+  percent_steem_dollars?: number
+  allow_votes?: boolean
+  allow_curation_rewards?: boolean
+  extensions?: any[]
+  beneficiaries?: Array<{ account: string; weight: number }>
+}
+
+/**
+ * Builds a `comment_options` operation.
+ * Automatically sorts beneficiaries alphabetically by account name as required by Steem consensus.
+ *
+ * @param author Author account name
+ * @param permlink Post or comment permlink
+ * @param options Comment options configuration
+ * @returns Tuple of `['comment_options', CommentOptionsOperation]`
+ */
+export const commentOptions = (
+  author: string,
+  permlink: string,
+  options: CommentOptionsConfig = {}
+): ['comment_options', CommentOptionsOperation] => {
+  const extensions: any[] = options.extensions ? [...options.extensions] : []
+
+  if (options.beneficiaries && options.beneficiaries.length > 0) {
+    const sortedBeneficiaries: Beneficiary[] = [...options.beneficiaries].sort((a, b) =>
+      a.account.localeCompare(b.account)
+    )
+    extensions.push([0, { beneficiaries: sortedBeneficiaries }])
+  }
+
+  const op: CommentOptionsOperation = {
+    author,
+    permlink,
+    max_accepted_payout: options.max_accepted_payout ?? '1000000.000 SBD',
+    percent_steem_dollars: options.percent_steem_dollars ?? 10000,
+    allow_votes: options.allow_votes ?? true,
+    allow_curation_rewards: options.allow_curation_rewards ?? true,
+    extensions
+  }
+
+  return ['comment_options', op]
+}
+
+/**
+ * Check if a Steem account exists on the blockchain.
+ * Returns false immediately if username fails validation without making an RPC call.
+ *
+ * @param username Account name to verify
+ * @returns Promise resolving to true if account exists, false otherwise
+ */
+export const accountExists = async (username: string): Promise<boolean> => {
+  if (!username || validateUsername(username) !== null) return false
+  try {
+    const accounts = await callRPC<any[]>('condenser_api.get_accounts', [[username]])
+    return Array.isArray(accounts) && accounts.length > 0
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Retrieves the user profile object from an account or username.
+ * Safely parses `posting_json_metadata` or `json_metadata` and extracts the profile object.
+ *
+ * @param accountOrName Account object or Steem username
+ * @returns Profile dictionary or empty object if none found
+ */
+export const getProfile = async (
+  accountOrName: string | Account | ExtendedAccount
+): Promise<Record<string, any>> => {
+  let account: any
+  if (typeof accountOrName === 'string') {
+    const accounts = await callRPC<any[]>('condenser_api.get_accounts', [[accountOrName]])
+    if (!accounts || accounts.length === 0) return {}
+    account = accounts[0]
+  } else {
+    account = accountOrName
+  }
+
+  for (const field of ['posting_json_metadata', 'json_metadata']) {
+    if (account && account[field]) {
+      try {
+        const parsed =
+          typeof account[field] === 'string' ? JSON.parse(account[field]) : account[field]
+        if (parsed && typeof parsed.profile === 'object' && parsed.profile !== null) {
+          return parsed.profile
+        }
+      } catch {
+        // continue
+      }
+    }
+  }
+  return {}
+}
+
+/**
+ * Returns the required signing role ('posting', 'active', or 'owner') for a given operation name.
+ *
+ * @param operationName The operation name (e.g., 'vote', 'transfer', 'account_update')
+ * @returns Required KeyRole
+ */
+export const getRequiredRole = (operationName: OperationName): KeyRole => {
+  switch (operationName) {
+    case 'vote':
+    case 'comment':
+    case 'delete_comment':
+    case 'custom_json':
+    case 'claim_reward_balance':
+      return 'posting'
+
+    case 'account_update':
+    case 'account_create':
+    case 'change_recovery_account':
+    case 'recover_account':
+    case 'reset_account':
+    case 'set_reset_account':
+      return 'owner'
+
+    default:
+      return 'active'
+  }
 }

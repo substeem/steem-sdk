@@ -78,6 +78,24 @@ const mana = await utils.getVotingMana('substeem.app')
 console.log('Voting Power %:', mana.percentage)
 ```
 
+### 4. Message Signing & Authority Management
+```typescript
+import { utils, authority, PrivateKey } from '@substeem/steem-sdk'
+
+// Sign & verify messages (Steem Keychain requestSignBuffer compatible)
+const priv = PrivateKey.from('5J...')
+const sig = utils.signMessage('Login at ' + Date.now(), priv)
+const isValid = await utils.verifyMessage(msg, sig, 'substeem.app', 'posting')
+
+// Build comment_options with automatic alphabetical beneficiary sorting
+const [, commentOp] = utils.commentOptions('author', 'permlink', {
+  beneficiaries: [
+    { account: 'substeem.app', weight: 1000 },
+    { account: 'alice', weight: 500 }
+  ]
+})
+```
+
 ---
 
 ## Building

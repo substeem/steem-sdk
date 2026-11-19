@@ -15,6 +15,14 @@ import { callRPC, RPCError } from './helpers/call.js'
 import { DigestData } from './types.js'
 import { cachedRPC } from './helpers/cachedRPC.js'
 
+/**
+ * Parse blockchain ISO timestamp (e.g. "2026-11-19T06:55:00") into milliseconds UTC.
+ * Ensures timestamps without explicit timezone indicator 'Z' are parsed as UTC.
+ */
+export const chainTime = (time: string): number => {
+  return new Date(time.endsWith('Z') ? time : time + 'Z').getTime()
+}
+
 export interface TransactionOptions {
   transaction?: TransactionType | Transaction
   /**
@@ -284,7 +292,8 @@ export class Transaction {
     const bytes = hexToBytes(props.head_block_id)
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
     const refBlockPrefix = view.getUint32(4, true)
-    const expirationIso = new Date(Date.now() + expiration).toISOString().slice(0, -5)
+    const headTimeMs = chainTime(props.time)
+    const expirationIso = new Date(headTimeMs + expiration).toISOString().slice(0, -5)
     this.transaction = {
       expiration: expirationIso,
       extensions: [],
