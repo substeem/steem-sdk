@@ -14,6 +14,7 @@ import {
   streamBlocks,
   streamBlockNumbers,
   streamOperations,
+  Client,
   type AppliedOperation,
   type Block,
   type Operation
@@ -625,6 +626,51 @@ export const coverageTests = async () => {
     } finally {
       config.nodes = temp
     }
+  })
+
+  console.log('Testing Client...')
+
+  await runTest('Client.database.getDynamicGlobalProperties', async () => {
+    const client = new Client()
+    const props = await client.database.getDynamicGlobalProperties()
+    return typeof props.head_block_number === 'number' && props.head_block_number > 0
+  })
+
+  await runTest('Client.database.getAccounts', async () => {
+    const client = new Client()
+    const accounts = await client.database.getAccounts(['substeem.app'])
+    return accounts.length === 1 && accounts[0].name === 'substeem.app'
+  })
+
+  await runTest('Client.database.getVestingDelegations', async () => {
+    const client = new Client()
+    const delegations = await client.database.getVestingDelegations('steemit', '', 1)
+    return Array.isArray(delegations)
+  })
+
+  await runTest('Client.broadcast.sign', async () => {
+    const client = new Client()
+    const privKey = PrivateKey.fromString(testPrivateKey)
+    const rawTx = {
+      expiration: '2026-11-19T12:00:00',
+      extensions: [],
+      operations: [
+        [
+          'vote',
+          {
+            voter: 'alice',
+            author: 'bob',
+            permlink: 'test',
+            weight: 10000
+          }
+        ]
+      ],
+      ref_block_num: 1234,
+      ref_block_prefix: 5678,
+      signatures: []
+    }
+    const signed = client.broadcast.sign(rawTx, privKey)
+    return Array.isArray(signed.signatures) && signed.signatures.length === 1
   })
 
   console.log('Testing streamBlocks...')

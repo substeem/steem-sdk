@@ -11,6 +11,8 @@ export interface Authority {
   key_auths: Array<[string | PublicKey, number]>
 }
 
+export type AuthorityType = Authority
+
 export interface Beneficiary {
   account: string
   weight: number
@@ -21,6 +23,8 @@ export interface Price {
   base: Asset | string
   quote: Asset | string
 }
+
+export type PriceType = Price | { base: string | Asset; quote: string | Asset }
 
 // Chain Properties
 export interface ChainProperties {
@@ -520,6 +524,138 @@ export interface TransactionType {
   ref_block_num: number
   ref_block_prefix: number
   signatures: string[]
+}
+
+export type SignedTransaction = TransactionType
+
+export interface Manabar {
+  current_mana: string | number
+  last_update_time: number
+}
+
+export interface Account {
+  id: number
+  name: string
+  owner: Authority
+  active: Authority
+  posting: Authority
+  memo_key: string
+  json_metadata: string
+  posting_json_metadata?: string
+  proxy: string
+  last_owner_update: string
+  last_account_update: string
+  created: string
+  mined: boolean
+  recovery_account: string
+  reset_account: string
+  last_account_recovery: string
+  comment_count: number
+  lifetime_vote_count: number
+  post_count: number
+  can_vote: boolean
+  voting_power: number
+  last_vote_time: string
+  voting_manabar: Manabar
+  downvote_manabar?: Manabar
+  balance: Asset | string
+  savings_balance: Asset | string
+  sbd_balance: Asset | string
+  sbd_seconds: string
+  sbd_seconds_last_update: string
+  sbd_last_interest_payment: string
+  savings_sbd_balance: Asset | string
+  savings_sbd_seconds: string
+  savings_sbd_seconds_last_update: string
+  savings_sbd_last_interest_payment: string
+  savings_withdraw_requests: number
+  reward_sbd_balance: Asset | string
+  reward_steem_balance: Asset | string
+  reward_vesting_balance: Asset | string
+  reward_vesting_steem: Asset | string
+  curation_rewards: number | string
+  posting_rewards: number | string
+  vesting_shares: Asset | string
+  delegated_vesting_shares: Asset | string
+  received_vesting_shares: Asset | string
+  vesting_withdraw_rate: Asset | string
+  next_vesting_withdrawal: string
+  withdrawn: number | string
+  to_withdraw: number | string
+  withdraw_routes: number
+  proxied_vsf_votes: number[]
+  witnesses_voted_for: number
+  last_post: string
+  last_root_post: string
+  pending_claimed_accounts?: number
+}
+
+export interface ExtendedAccount extends Account {
+  vesting_balance: Asset | string
+  reputation: string | number
+  transfer_history: any[]
+  market_history: any[]
+  post_history: any[]
+  vote_history: any[]
+  other_history: any[]
+  witness_votes: string[]
+  tags_usage: string[]
+  guest_bloggers: string[]
+  open_orders?: any[]
+  comments?: any[]
+  blog?: any[]
+  feed?: any[]
+  recent_replies?: any[]
+  recommended?: any[]
+}
+
+export interface DynamicGlobalProperties {
+  head_block_number: number
+  head_block_id: string
+  time: string
+  current_witness: string
+  total_pow: number
+  num_pow_witnesses: number
+  virtual_supply: Asset | string
+  current_supply: Asset | string
+  confidential_supply: Asset | string
+  current_sbd_supply: Asset | string
+  confidential_sbd_supply: Asset | string
+  total_vesting_fund_steem: Asset | string
+  total_vesting_shares: Asset | string
+  total_reward_fund_steem: Asset | string
+  total_reward_shares2: string
+  pending_rewarded_vesting_shares: Asset | string
+  pending_rewarded_vesting_steem: Asset | string
+  sbd_interest_rate: number
+  sbd_print_rate: number
+  maximum_block_size: number
+  required_actions_partition_percent: number
+  current_aslot: number
+  recent_slots_filled: string
+  participation_count: number
+  last_irreversible_block_num: number
+  vote_power_reserve_rate: number
+  delegation_return_period: number
+  reverse_auction_seconds: number
+  available_account_subsidies: number
+  sbd_stop_percent: number
+  sbd_start_percent: number
+  next_maintenance_time: string
+  last_budget_time: string
+  content_reward_percent: number
+  vesting_reward_percent: number
+  sps_fund_percent: number
+  sps_interval_ledger: Asset | string
+  downvote_pool_percent: number
+}
+
+export interface VestingDelegation {
+  id: number
+  delegator: string
+  delegatee: string
+  vesting_shares: Asset | string
+  min_delegation_time: string
 }
 
 export interface BlockTransaction extends TransactionType {

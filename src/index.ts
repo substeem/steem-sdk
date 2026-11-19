@@ -8,6 +8,7 @@ export { Signature } from './helpers/Signature.js'
 export { Memo } from './helpers/memo.js'
 export { Asset } from './helpers/Asset.js'
 export * as utils from './helpers/utils.js'
+export { Client, DatabaseAPI, BroadcastAPI, type ClientOptions } from './Client.js'
 
 // Export all types
 export * from './types.js'
