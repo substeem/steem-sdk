@@ -541,7 +541,7 @@ export interface Account {
   owner: Authority
   active: Authority
   posting: Authority
-  memo_key: string
+  memo_key: string | PublicKey
   json_metadata: string
   posting_json_metadata?: string
   proxy: string

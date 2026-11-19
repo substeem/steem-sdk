@@ -1,6 +1,6 @@
 {
   "name": "@substeem/steem-sdk",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Lightweight and complete TypeScript SDK for Steem blockchain operations. Create, sign, and broadcast transactions with full type safety, cryptographic utilities, and serialization support.",
   "author": "Substeem",
   "license": "MIT",

@@ -36,7 +36,7 @@ export const grantAccountAuthority = (
 ): ['account_update2', AccountUpdate2Operation] => {
   const currentAuth = account[role]
   const currentAccountAuths: [string, number][] = currentAuth?.account_auths
-    ? currentAuth.account_auths.map(([a, w]) => [a, w])
+    ? [...currentAuth.account_auths]
     : []
 
   const index = currentAccountAuths.findIndex(([a]) => a === authorizedAccount)
@@ -52,7 +52,7 @@ export const grantAccountAuthority = (
   const updatedAuthority: Authority = {
     weight_threshold: currentAuth?.weight_threshold ?? 1,
     account_auths: currentAccountAuths,
-    key_auths: currentAuth?.key_auths ? currentAuth.key_auths.map(([k, w]) => [k, w]) : []
+    key_auths: currentAuth?.key_auths ? [...currentAuth.key_auths] : []
   }
 
   const op: AccountUpdate2Operation = {
@@ -83,13 +83,13 @@ export const revokeAccountAuthority = (
 ): ['account_update2', AccountUpdate2Operation] => {
   const currentAuth = account[role]
   const filteredAccountAuths: [string, number][] = currentAuth?.account_auths
-    ? currentAuth.account_auths.filter(([a]) => a !== authorizedAccount).map(([a, w]) => [a, w])
+    ? currentAuth.account_auths.filter(([a]) => a !== authorizedAccount)
     : []
 
   filteredAccountAuths.sort((a, b) => a[0].localeCompare(b[0]))
 
-  const currentKeyAuths = currentAuth?.key_auths
-    ? currentAuth.key_auths.map(([k, w]) => [k, w])
+  const currentKeyAuths: Authority['key_auths'] = currentAuth?.key_auths
+    ? [...currentAuth.key_auths]
     : []
 
   // Lockout prevention check: do not allow removing authority if no keys or accounts remain

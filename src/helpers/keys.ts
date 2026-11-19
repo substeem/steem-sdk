@@ -114,8 +114,7 @@ export const verifyMessage = async (
 
     const account = accountOrKey as Account | ExtendedAccount
     if (role === 'memo') {
-      const memo =
-        typeof account.memo_key === 'string' ? account.memo_key : account.memo_key?.toString()
+      const memo = String(account.memo_key)
       return memo === recoveredKey
     }
 
@@ -169,8 +168,7 @@ export const getKeyRole = async (
   }
 
   if (account.memo_key) {
-    const memoStr =
-      typeof account.memo_key === 'string' ? account.memo_key : account.memo_key.toString()
+    const memoStr = String(account.memo_key)
     if (memoStr === pubKeyStr) return 'memo'
   }
 
