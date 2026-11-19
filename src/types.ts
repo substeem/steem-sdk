@@ -1,6 +1,7 @@
-export { Asset } from './helpers/Asset.js'
 import { Asset } from './helpers/Asset.js'
 import { PublicKey } from './helpers/PublicKey.js'
+
+export { Asset }
 
 // Asset types
 export type AssetSymbol = 'STEEM' | 'SBD' | 'VESTS' | 'TESTS' | 'TBD'
