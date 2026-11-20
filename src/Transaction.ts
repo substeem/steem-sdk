@@ -30,12 +30,18 @@ export interface TransactionOptions {
    * @default 60_000
    */
   expiration?: number
+  chainId?: string
+  nodes?: string[]
 }
 
 export class Transaction {
   transaction?: TransactionType
 
   expiration: number = 60_000
+
+  chainId?: string
+
+  nodes?: string[]
 
   private txId?: string
 
@@ -44,6 +50,8 @@ export class Transaction {
     if (options instanceof Transaction) {
       this.transaction = options.transaction ? { ...options.transaction } : undefined
       this.expiration = options.expiration
+      this.chainId = options.chainId
+      this.nodes = options.nodes ? [...options.nodes] : undefined
       if (this.transaction) {
         this.txId = this.digest().txId
       }
@@ -62,21 +70,36 @@ export class Transaction {
       if (tx instanceof Transaction) {
         this.transaction = tx.transaction ? { ...tx.transaction } : undefined
         this.expiration = tx.expiration
+        this.chainId = tx.chainId
+        this.nodes = tx.nodes ? [...tx.nodes] : undefined
       } else {
         this.transaction = { ...tx }
       }
       if (options.expiration) {
         this.expiration = options.expiration
       }
+      if (options.chainId) {
+        this.chainId = options.chainId
+      }
+      if (options.nodes) {
+        this.nodes = Array.isArray(options.nodes) ? [...options.nodes] : [options.nodes]
+      }
       if (this.transaction) {
         this.txId = this.digest().txId
       }
     } else if (
       typeof options === 'object' &&
-      'expiration' in options &&
-      typeof options.expiration === 'number'
+      ('expiration' in options || 'chainId' in options || 'nodes' in options)
     ) {
-      this.expiration = options.expiration
+      if (typeof options.expiration === 'number') {
+        this.expiration = options.expiration
+      }
+      if (options.chainId) {
+        this.chainId = options.chainId
+      }
+      if (options.nodes) {
+        this.nodes = Array.isArray(options.nodes) ? [...options.nodes] : [options.nodes]
+      }
     }
   }
 
@@ -178,7 +201,7 @@ export class Transaction {
 
     let res: any
     try {
-      res = await callRPC(method, [this.transaction], timeout, retry)
+      res = await callRPC(method, [this.transaction], timeout, retry, this.nodes)
     } catch (e: any) {
       if (
         e instanceof RPCError &&
@@ -241,7 +264,8 @@ export class Transaction {
     buffer.flip()
     const transactionData = new Uint8Array(buffer.toBuffer())
     const txId = bytesToHex(sha256(transactionData)).slice(0, 40)
-    const digest = sha256(new Uint8Array([...hexToBytes(config.chain_id), ...transactionData]))
+    const chainId = this.chainId ?? config.chain_id
+    const digest = sha256(new Uint8Array([...hexToBytes(chainId), ...transactionData]))
     return { digest, txId }
   }
 
@@ -272,10 +296,16 @@ export class Transaction {
       this.txId = this.digest().txId
     }
     try {
-      return await callRPC('transaction_status_api.find_transaction', {
-        transaction_id: this.txId,
-        expiration: this.transaction?.expiration
-      })
+      return await callRPC(
+        'transaction_status_api.find_transaction',
+        {
+          transaction_id: this.txId,
+          expiration: this.transaction?.expiration
+        },
+        undefined,
+        undefined,
+        this.nodes
+      )
     } catch {
       return { status: 'unknown' }
     }
@@ -288,7 +318,13 @@ export class Transaction {
    * @param expiration Transaction expiration in milliseconds
    */
   private createTransaction = async (expiration: number) => {
-    const props = await cachedRPC('condenser_api.get_dynamic_global_properties')
+    const props = await cachedRPC(
+      'condenser_api.get_dynamic_global_properties',
+      [],
+      undefined,
+      undefined,
+      this.nodes
+    )
     const bytes = hexToBytes(props.head_block_id)
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
     const refBlockPrefix = view.getUint32(4, true)

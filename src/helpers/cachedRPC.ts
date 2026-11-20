@@ -8,8 +8,14 @@ const cache = new Map<string, { time: number; result: Promise<unknown> }>()
 /**
  * `callRPC` with a short cache. Concurrent callers share one request; failures are not cached.
  */
-export const cachedRPC = <T = any>(method: string, params: unknown[] | object = []): Promise<T> => {
-  const key = method + JSON.stringify(params)
+export const cachedRPC = <T = any>(
+  method: string,
+  params: unknown[] | object = [],
+  timeout?: number,
+  retry?: number,
+  nodes?: string[]
+): Promise<T> => {
+  const key = method + JSON.stringify(params) + (nodes ? ':' + nodes.join(',') : '')
   const now = Date.now()
   const hit = cache.get(key)
   if (hit && now - hit.time <= CACHE_MS) {
@@ -19,7 +25,7 @@ export const cachedRPC = <T = any>(method: string, params: unknown[] | object = 
   for (const [k, entry] of cache) {
     if (now - entry.time > CACHE_MS) cache.delete(k)
   }
-  const result = callRPC<T>(method, params)
+  const result = callRPC<T>(method, params, timeout, retry, nodes)
   cache.set(key, { time: now, result })
   result.catch(() => cache.delete(key))
   return result

@@ -667,8 +667,10 @@ export interface BlockTransaction extends TransactionType {
   transaction_num: number
 }
 
+export type AnyOperation = Operation | VirtualOperation
+
 /** An operation as applied in a block, as returned by `get_ops_in_block` */
-export interface AppliedOperation {
+export interface AppliedOperation<T = AnyOperation> {
   block: number
   /** All zeros for virtual operations that no transaction caused */
   trx_id: string
@@ -678,7 +680,7 @@ export interface AppliedOperation {
   op_in_trx: number
   virtual_op: boolean
   timestamp: string
-  op: Operation | VirtualOperation
+  op: T
 }
 
 export interface Block {

@@ -111,22 +111,36 @@ const jsonRPCBatch = async (
 }
 
 /** Sends `request` to the current node, moving to the next node on network or node failure */
-const withRPCFailover = async <T>(request: (node: string) => Promise<T>, retry: number) => {
-  if (!Array.isArray(config.nodes) || config.nodes.length === 0) {
+const withRPCFailover = async <T>(
+  request: (node: string) => Promise<T>,
+  retry: number,
+  nodes: string[] = config.nodes
+) => {
+  const nodePool = nodes || config.nodes
+  if (!Array.isArray(nodePool) || nodePool.length === 0) {
     throw new Error('config.nodes must be a non-empty array of node URLs')
   }
+  const isDefaultPool = nodePool === config.nodes
+  let localIndex = isDefaultPool ? rpcIndex : 0
   for (let tries = 0; ; tries++) {
-    if (rpcIndex >= config.nodes.length) {
-      rpcIndex = 0
+    if (localIndex >= nodePool.length) {
+      localIndex = 0
     }
     try {
-      return await request(config.nodes[rpcIndex])
+      const result = await request(nodePool[localIndex])
+      if (isDefaultPool) {
+        rpcIndex = localIndex
+      }
+      return result
     } catch (e) {
       // RPC errors come from the chain; another node would give the same answer
       if (e instanceof RPCError || tries >= retry) {
         throw e
       }
-      changeRPCNode()
+      localIndex++
+      if (isDefaultPool) {
+        changeRPCNode()
+      }
     }
   }
 }
@@ -142,6 +156,7 @@ const withRPCFailover = async <T>(request: (node: string) => Promise<T>, retry: 
  * @param params - Parameters for the API method as array or object
  * @param timeout - Request timeout in milliseconds (default: config.timeout)
  * @param retry - Number of retry attempts before throwing an error (default: config.retry)
+ * @param nodes - Optional custom node URLs (default: config.nodes)
  * @returns Promise resolving to the API response
  * @throws Error if all retry attempts fail or on RPCError
  *
@@ -160,9 +175,10 @@ export const callRPC = async <T = any>(
   method: string,
   params: any[] | object = [],
   timeout = config.timeout,
-  retry = config.retry
+  retry = config.retry,
+  nodes = config.nodes
 ): Promise<T> => {
-  return withRPCFailover((node) => jsonRPCCall(node, method, params, timeout), retry)
+  return withRPCFailover((node) => jsonRPCCall(node, method, params, timeout), retry, nodes)
 }
 
 /**
@@ -185,9 +201,10 @@ export const callRPCBatch = async <T = any>(
   method: string,
   paramsList: unknown[],
   timeout = config.timeout,
-  retry = config.retry
+  retry = config.retry,
+  nodes = config.nodes
 ): Promise<T[]> => {
-  return withRPCFailover((node) => jsonRPCBatch(node, method, paramsList, timeout), retry)
+  return withRPCFailover((node) => jsonRPCBatch(node, method, paramsList, timeout), retry, nodes)
 }
 
 /**
@@ -258,12 +275,14 @@ export async function callREST<T = any>(
 export const callWithQuorum = async <T = any>(
   method: string,
   params: any[] | object = [],
-  quorum = 2
+  quorum = 2,
+  nodes = config.nodes
 ): Promise<T> => {
-  if (!Array.isArray(config.nodes) || config.nodes.length === 0) {
+  const nodePool = nodes || config.nodes
+  if (!Array.isArray(nodePool) || nodePool.length === 0) {
     throw new Error('config.nodes must be a non-empty array')
   }
-  if (quorum > config.nodes.length) {
+  if (quorum > nodePool.length) {
     throw new Error('quorum > config.nodes.length')
   }
   // Uniform Fisher-Yates shuffle using cryptographically secure random values
@@ -278,7 +297,7 @@ export const callWithQuorum = async <T = any>(
     }
     return result
   }
-  let allNodes = shuffleNodes(config.nodes)
+  let allNodes = shuffleNodes(nodePool)
   let currentBatchSize = Math.min(quorum, allNodes.length)
   let allResults: any[] = []
   while (currentBatchSize > 0 && allNodes.length > 0) {

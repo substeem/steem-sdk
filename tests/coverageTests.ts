@@ -676,6 +676,16 @@ export const coverageTests = async () => {
     return Array.isArray(signed.signatures) && signed.signatures.length === 1
   })
 
+  await runTest('Client instance keeps isolated nodes without mutating config.nodes', async () => {
+    const originalNodes = [...config.nodes]
+    const isolatedClient = new Client('https://api.moecki.online')
+    const isolatedNodesMatch =
+      isolatedClient.nodes.length === 1 && isolatedClient.nodes[0] === 'https://api.moecki.online'
+    const configUntouched = isDeepStrictEqual(config.nodes, originalNodes)
+    const props = await isolatedClient.database.getDynamicGlobalProperties()
+    return isolatedNodesMatch && configUntouched && props.head_block_number > 0
+  })
+
   console.log('Testing streamBlocks...')
 
   await runTest('streamBlockNumbers() yields a past range in order and stops', async () => {
@@ -743,6 +753,20 @@ export const coverageTests = async () => {
     const c4 = new Set(ops.map((o) => o.block)).size === 5
     return c1 && c2 && c3 && c4
   })
+
+  await runTest(
+    'streamOperations() with operation filter yields only matching operations',
+    async () => {
+      const range = { from: 90000000, to: 90000004 }
+      const filteredOps: AppliedOperation[] = []
+      for await (const op of streamOperations('producer_reward', range)) {
+        filteredOps.push(op)
+      }
+      return (
+        filteredOps.length > 0 && filteredOps.every((o) => o.op[0] === 'producer_reward')
+      )
+    }
+  )
 
   console.log('Testing chainTime and authority helpers...')
 

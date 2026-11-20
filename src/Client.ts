@@ -24,7 +24,13 @@ export class DatabaseAPI {
    * Return extended accounts by username list.
    */
   async getAccounts(names: string[]): Promise<ExtendedAccount[]> {
-    return callRPC<ExtendedAccount[]>('condenser_api.get_accounts', [names], this.client.timeout)
+    return callRPC<ExtendedAccount[]>(
+      'condenser_api.get_accounts',
+      [names],
+      this.client.timeout,
+      this.client.retry,
+      this.client.nodes
+    )
   }
 
   /**
@@ -34,7 +40,9 @@ export class DatabaseAPI {
     return callRPC<DynamicGlobalProperties>(
       'condenser_api.get_dynamic_global_properties',
       [],
-      this.client.timeout
+      this.client.timeout,
+      this.client.retry,
+      this.client.nodes
     )
   }
 
@@ -49,7 +57,9 @@ export class DatabaseAPI {
     return callRPC<VestingDelegation[]>(
       'condenser_api.get_vesting_delegations',
       [account, from, limit],
-      this.client.timeout
+      this.client.timeout,
+      this.client.retry,
+      this.client.nodes
     )
   }
 
@@ -57,7 +67,7 @@ export class DatabaseAPI {
    * Generic database/condenser_api call.
    */
   async call<T = any>(method: string, params: any[] | object = []): Promise<T> {
-    return callRPC<T>(method, params, this.client.timeout)
+    return callRPC<T>(method, params, this.client.timeout, this.client.retry, this.client.nodes)
   }
 }
 
@@ -71,7 +81,10 @@ export class BroadcastAPI {
     operations: Operation[],
     key: PrivateKey | PrivateKey[]
   ): Promise<BroadcastResult> {
-    const tx = new Transaction()
+    const tx = new Transaction({
+      chainId: this.client.chainId,
+      nodes: this.client.nodes
+    })
     await tx.create(operations)
     const keys = Array.isArray(key) ? key : [key]
     for (const k of keys) {
@@ -84,7 +97,11 @@ export class BroadcastAPI {
    * Sign a transaction object with private key (compatibility wrapper).
    */
   sign(transaction: any, key: PrivateKey | PrivateKey[]): any {
-    const tx = new Transaction(transaction)
+    const tx = new Transaction({
+      transaction,
+      chainId: this.client.chainId,
+      nodes: this.client.nodes
+    })
     const keys = Array.isArray(key) ? key : [key]
     for (const k of keys) {
       tx.sign(k)
@@ -95,31 +112,27 @@ export class BroadcastAPI {
 
 /**
  * High-level Steem RPC client providing familiar database and broadcast namespaces.
+ * Maintains isolated instance-scoped node and timeout configuration without mutating global state.
  */
 export class Client {
   readonly database: DatabaseAPI
   readonly broadcast: BroadcastAPI
+  nodes: string[]
   timeout: number
+  retry: number
+  chainId?: string
+  addressPrefix?: string
 
   constructor(address?: string | string[], options: ClientOptions = {}) {
     if (address) {
-      if (Array.isArray(address)) {
-        config.nodes = address
-      } else {
-        config.nodes = [address]
-      }
-    }
-    if (options.timeout) {
-      this.timeout = options.timeout
+      this.nodes = Array.isArray(address) ? [...address] : [address]
     } else {
-      this.timeout = config.timeout
+      this.nodes = [...config.nodes]
     }
-    if (options.chainId) {
-      config.chain_id = options.chainId
-    }
-    if (options.addressPrefix) {
-      config.address_prefix = options.addressPrefix
-    }
+    this.timeout = options.timeout ?? config.timeout
+    this.retry = options.retry ?? config.retry
+    this.chainId = options.chainId
+    this.addressPrefix = options.addressPrefix
 
     this.database = new DatabaseAPI(this)
     this.broadcast = new BroadcastAPI(this)
@@ -130,6 +143,6 @@ export class Client {
    */
   async call<T = any>(api: string, method: string, params: any[] | object = []): Promise<T> {
     const fullMethod = api ? `${api}.${method}` : method
-    return callRPC<T>(fullMethod, params, this.timeout)
+    return callRPC<T>(fullMethod, params, this.timeout, this.retry, this.nodes)
   }
 }
